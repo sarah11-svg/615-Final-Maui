@@ -1,0 +1,173 @@
+---
+title: "Population and Economic Trends in Maui County"
+author: "La Su"
+format: pdf
+editor: visual
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+
+maui_trends <- readRDS("maui_trends.rds")
+```
+
+## 1. Introduction
+
+This project explores three key characteristics: total population, median household income, and unemployment rate trends in Maui County. The data is from American Community Survey (ACS) 5-year estimates between 2010 and 2023. Changes in population size, household income, and labor market conditions can have significant implications for local residents. Unemployment data is available starting in 2011. The value for 2010 is missing and is excluded from the unemployment visualization.
+
+In addition to time trends, a map of median household income is used to show how income levels vary across different areas within County. To help users observe these trends visually, I also created a Shiny app with multiple tabs and year range sliders.
+
+```{r}
+library(tidycensus)
+# census_api_key("94b46884a3b542109a2af8bdf4b79025ca4e652d", install = TRUE)
+```
+
+## **2. Analysis on Population**
+
+```{r}
+library(purrr)
+
+years <- 2010:2023
+
+pop_time <- map_df(years, function(y) {
+  get_acs(
+    geography = "county",
+    variables = "B01003_001",
+    state = "HI",
+    county = "Maui County",
+    year = y,
+    survey = "acs5"
+  ) %>%
+    mutate(year = y)
+})
+pop_time
+```
+
+```{r}
+ggplot(pop_time, aes(x = year, y = estimate)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Population of Maui County",
+    subtitle = "ACS 5-year Estimates (2010-2023)",
+    x = "Year",
+    y = "Population"
+  )
+```
+
+Interpretation: this figure shows the population of Maui county from 2010 to 2023. The population increased steadily from approximately 150,000 in 2010 to near 167,000 in 2020. After 2020, population declined a bit.
+
+## 3. Analysis on Economic
+
+```{r}
+income_time <- map_df(years, function(y) {
+  get_acs(
+    geography = "county",
+    variables = "B19013_001",
+    state = "HI",
+    county = "Maui County",
+    year = y,
+    survey = "acs5"
+  ) %>%
+    mutate(year = y)
+})
+income_time
+```
+
+```{r}
+ggplot(income_time, aes(x = year, y = estimate)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Median Household Income of Maui County",
+    subtitle = "ACS 5-year Estimates (2010-2023)",
+    x = "Year",
+    y = "Median household income (USD)"
+  )
+```
+
+Interpretation: this figure shows the median household income in Maui county from 2010 to 2023. Median income remained stable in the early 2010s, growth after 2013. By 2022-2023, median household income exceeded \$90,000, indicating strong income growth in recent years. This trend shows increasing earnings capacity, although rising income may encounter increased living cost.
+
+## 4. Analysis on Unemployment Rate
+
+```{r}
+library(tidyr)
+
+unemp_time <- map_df(2011:2023, function(y) {
+  get_acs(
+    geography = "county",
+    variables = c(
+      labor_force = "B23025_002",
+      unemployed  = "B23025_005"
+    ),
+    state = "HI",
+    county = "Maui County",
+    year = y,
+    survey = "acs5"
+  ) %>%
+    select(variable, estimate) %>%
+    pivot_wider(names_from = variable, values_from = estimate) %>%
+    mutate(
+      year = y,
+      unemployment_rate = unemployed / labor_force * 100
+    )
+})
+unemp_time
+```
+
+```{r}
+ggplot(unemp_time, aes(x = year, y = unemployment_rate)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    title = "Unemployment Rate in Maui County",
+    subtitle = "ACS 5-Year Estimates (2011–2023)",
+    x = "Year",
+    y = "Unemployment rate (%)"
+  )
+```
+
+Interpretation: this figure shows the unemployment rate in Maui County from 2011 to 2023. The unemployment rate was relatively high in the early 2010s, higher than 8% between 2011 and 2014. The unemployment declined from 2015 to 2019, reaching about 4% in 2019. After 2020, the unemployment rate increased, reflecting recent labor market depression.
+
+## 5. Mapping
+
+```{r}
+library(sf)
+
+income_med <- get_acs(
+  geography = "tract",
+  variables = "B19013_001",
+  state = "HI",
+  county = "Maui County",
+  year = 2023,
+  survey = "acs5",
+  geometry = TRUE
+)
+```
+
+```{r}
+income_med <- income_med %>%
+  filter(!is.na(estimate))
+```
+
+```{r}
+ggplot(income_med) +
+  geom_sf(aes(fill = estimate), color = NA) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    labels = scales::dollar_format()
+  ) +
+  labs(
+    title = "Median Household Income",
+    subtitle = "Maui County, ACS 5-Year Estimates (2019–2023)",
+    fill = "Median household income"
+  ) +
+  theme_void()
+```
+
+Interpretation: this map shows median household income across census tracts in Maui County. Income levels vary across different parts of the county. Higher income tracts are concentrated in coastal and residential areas, lower income tracts are in other parts of the island.
+
+## 6. Conclusion
+
+This project explores population and economic trends in Maui County. The results show that Maui's population increased steadily from 2010 through the late 2010s. Over the same period, median household income rose notably, showing broader economic growth and rising living costs. Unemployment rates declined after the early 2010s, reached a low before 2020, and then increased around the COVID-19 period, indicating the economic depressions. The Shiny app allows users to explore these trends across different time ranges, making it easier to compare changes over time.
